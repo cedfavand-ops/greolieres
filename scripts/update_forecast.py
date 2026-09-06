@@ -56,7 +56,7 @@ def fetch_openmeteo(past_hours=0, forecast_days=3):
         "latitude": LAT,
         "longitude": LON,
         "hourly": ",".join([
-            "temperature_2m", "wind_speed_10m", "wind_direction_10m",
+            "temperature_2m", "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m",
             "cloud_cover", "cloud_cover_low", "cloud_cover_mid", "cloud_cover_high",
             "precipitation", "rain", "snowfall", "relative_humidity_2m",
         ]),
@@ -180,6 +180,7 @@ def main():
 
     temp = series("temperature_2m")
     wind_speed = series("wind_speed_10m")
+    wind_gusts = series("wind_gusts_10m")
     wind_dir = series("wind_direction_10m")
     cloud_total = series("cloud_cover")
     cloud_high = series("cloud_cover_high")
@@ -213,6 +214,7 @@ def main():
         i = idx_by_time[t]
         raw_t = temp[i]
         ws = wind_speed[i] or 0
+        wg = wind_gusts[i] or 0
         wd = wind_dir[i] or 0
         ct = cloud_total[i] if cloud_total[i] is not None else 100
         ch = cloud_high[i]
@@ -234,6 +236,7 @@ def main():
             "temp_corrected": round(corrected_t, 1),
             "corrected": apply_corr,
             "wind_speed": round(ws, 1),
+            "wind_gusts": round(wg, 1),
             "wind_dir": round(wd),
             "cloud_cover": round(ct),
             "picto": picto,
