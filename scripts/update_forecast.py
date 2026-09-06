@@ -5,19 +5,35 @@ ICON-CH1 (Open-Meteo / MétéoSuisse), avec correction nocturne du "trou à
 froid" apprise automatiquement à partir des observations de la station
 Datacake.
 
+La correction n'est PAS un simple décalage fixe appliqué toute la nuit :
+le refroidissement radiatif d'un trou à froid est rapide juste après le
+coucher du soleil puis ralentit progressivement jusqu'au lever du jour.
+Le script apprend donc un décalage indépendant pour chaque heure comptée
+depuis le début de la fenêtre de correction (~15 min avant le coucher du
+soleil), via une moyenne mobile par "case horaire" (data/bias_state.json
+-> "offset_profile"), plutôt qu'un seul chiffre moyen pour toute la nuit.
+
+L'éligibilité (une heure compte-t-elle comme "ciel dégagé + calme" pour
+appliquer/apprendre la correction ?) se base sur une nébulosité effective
+qui privilégie les nuages bas et moyens (ceux qui bloquent vraiment le
+rayonnement infrarouge nocturne) et n'accorde qu'un poids atténué aux
+nuages hauts (cirrus), qui freinent un peu le refroidissement mais bien
+moins que des nuages bas.
+
 Variables d'environnement attendues (secrets GitHub Actions) :
   DATACAKE_TOKEN        token d'accès personnel Datacake (obligatoire pour l'apprentissage)
   DATACAKE_DEVICE_ID    UUID du device Datacake (pas l'ID de la page publique /pd/...)
   DATACAKE_TEMP_FIELD   nom du champ température (ex: TEMPERATURE), défaut "TEMPERATURE"
 
-Sans DATACAKE_TOKEN, le script fonctionne quand même : il applique la
-dernière correction connue (stockée dans data/bias_state.json) mais ne
-peut pas l'affiner.
+Sans DATACAKE_TOKEN, le script fonctionne quand même : il applique le
+dernier profil de correction connu (stocké dans data/bias_state.json)
+mais ne peut pas l'affiner.
 """
 import json
+import math
 import os
 import sys
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import urllib.request
@@ -38,11 +54,13 @@ DATACAKE_TOKEN = os.environ.get("DATACAKE_TOKEN", "").strip()
 DATACAKE_DEVICE_ID = os.environ.get("DATACAKE_DEVICE_ID", "").strip()
 DATACAKE_TEMP_FIELD = os.environ.get("DATACAKE_TEMP_FIELD", "TEMPERATURE").strip()
 
-CLEAR_CLOUD_THRESHOLD = 20      # % de nébulosité totale en-dessous duquel on considère "ciel dégagé"
+CLEAR_CLOUD_THRESHOLD = 20      # seuil de nébulosité EFFECTIVE (%) en-dessous duquel on considère "ciel dégagé"
 CALM_WIND_THRESHOLD = 10        # km/h de vent moyen en-dessous duquel on considère "vent faible"
-NIGHT_CORR_START_HOUR = 19      # 19h
-DEFAULT_ALPHA = 0.25            # poids donné à la dernière nuit dans la moyenne mobile
-MAX_HISTORY = 90                # nombre d'entrées de bias_history conservées
+HIGH_CLOUD_ATTENUATION = 0.3    # poids résiduel des nuages hauts dans la nébulosité effective (0=ignorés, 1=comme bas/moyen)
+SUNSET_LEAD_MINUTES = 15        # la fenêtre de correction démarre ~15 min avant le coucher du soleil
+DEFAULT_ALPHA = 0.25            # poids donné à la dernière nuit dans la moyenne mobile (par case horaire)
+MAX_HISTORY = 90                # nombre de nuits conservées dans l'historique
+MAX_BUCKET_HOURS = 16           # nombre max de cases horaires suivies après le début de fenêtre (nuits longues d'hiver)
 
 
 def http_get_json(url, headers=None):
@@ -77,6 +95,15 @@ def parse_iso_local(s):
     return dt.replace(tzinfo=TZ)
 
 
+def effective_cloud(cloud_low, cloud_mid, cloud_high):
+    """Nébulosité 'effective' pour juger si le ciel est assez dégagé pour un
+    fort refroidissement radiatif : les nuages bas/moyens comptent plein pot,
+    les nuages hauts (cirrus) ne comptent que partiellement (ils freinent un
+    peu le refroidissement mais bien moins qu'un vrai plafond bas)."""
+    low_mid = max(cloud_low or 0, cloud_mid or 0)
+    return min(100, low_mid + HIGH_CLOUD_ATTENUATION * (cloud_high or 0))
+
+
 def pick_picto(cloud_total, cloud_low, cloud_mid, cloud_high, precipitation, rain, snowfall, humidity, wind_speed):
     if snowfall and snowfall > 0.05:
         return "neige"
@@ -101,12 +128,29 @@ def pick_picto(cloud_total, cloud_low, cloud_mid, cloud_high, precipitation, rai
     return "couvert"
 
 
+def default_offset(bucket):
+    """Estimation de départ (avant tout apprentissage) pour la case horaire
+    `bucket` (0 = première heure de la fenêtre de correction, proche du
+    coucher du soleil). Forme volontairement non-linéaire : chute assez
+    rapide les 2-3 premières heures puis ralentissement, sans plafond dur
+    (l'apprentissage réel prendra le relais et peut aller bien plus loin
+    sur un trou à froid marqué)."""
+    return -(2.0 + 8.0 * (1 - math.exp(-bucket / 2.5)))
+
+
 def load_bias_state():
     if os.path.exists(BIAS_PATH):
         with open(BIAS_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+            state = json.load(f)
+        state.setdefault("offset_profile", {})
+        state.setdefault("alpha", DEFAULT_ALPHA)
+        state.setdefault("last_processed_night", None)
+        state.setdefault("last_night_error_c", None)
+        state.setdefault("last_night_samples", 0)
+        state.setdefault("history", [])
+        return state
     return {
-        "offset_c": -2.0,   # estimation initiale à affiner : trou à froid ~ -2°C sous le modèle
+        "offset_profile": {},   # {"0": -2.1, "1": -4.3, ...} appris case horaire par case horaire
         "alpha": DEFAULT_ALPHA,
         "last_processed_night": None,
         "last_night_error_c": None,
@@ -162,6 +206,7 @@ def nearest_value(series, target_dt, max_gap_minutes=40):
 
 
 def compute_window(now):
+    """Fenêtre d'AFFICHAGE, fixe : 18h du jour même -> 17h le lendemain."""
     window_start = now.replace(hour=18, minute=0, second=0, microsecond=0)
     window_end = window_start + timedelta(hours=23)  # lendemain 17h
     if now > window_end:
@@ -170,12 +215,28 @@ def compute_window(now):
     return window_start, window_end
 
 
+def corr_window_for_evening(evening_date, sunset_by_date, sunrise_by_date):
+    """Fenêtre de CORRECTION pour la nuit qui commence le soir de `evening_date` :
+    ~15 min avant le coucher du soleil (arrondi à l'heure pleine) -> lever du
+    soleil du lendemain + 1h. Retourne (None, None) si les données manquent."""
+    sunset_dt = sunset_by_date.get(evening_date)
+    if sunset_dt is None:
+        return None, None
+    start = (sunset_dt - timedelta(minutes=SUNSET_LEAD_MINUTES)).replace(minute=0, second=0, microsecond=0)
+    next_day = evening_date + timedelta(days=1)
+    sunrise_dt = sunrise_by_date.get(next_day)
+    end = (sunrise_dt + timedelta(hours=1)) if sunrise_dt else None
+    return start, end
+
+
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
     now = datetime.now(TZ)
     bias = load_bias_state()
+    profile = bias["offset_profile"]
+    alpha = bias.get("alpha", DEFAULT_ALPHA)
 
-    om = fetch_openmeteo(past_hours=30, forecast_days=3)
+    om = fetch_openmeteo(past_hours=36, forecast_days=3)
     hourly = om["hourly"]
     times = [parse_iso_local(t) for t in hourly["time"]]
 
@@ -197,20 +258,23 @@ def main():
 
     idx_by_time = {t: i for i, t in enumerate(times)}
 
-    daily_times = [datetime.fromisoformat(d).date() for d in om["daily"]["time"]]
-    sunrise_by_date = {}
-    for i, d in enumerate(daily_times):
-        sr = om["daily"]["sunrise"][i]
-        sunrise_by_date[d] = parse_iso_local(sr)
+    daily_dates = [datetime.fromisoformat(d).date() for d in om["daily"]["time"]]
+    sunrise_by_date, sunset_by_date = {}, {}
+    for i, d in enumerate(daily_dates):
+        sunrise_by_date[d] = parse_iso_local(om["daily"]["sunrise"][i])
+        sunset_by_date[d] = parse_iso_local(om["daily"]["sunset"][i])
 
+    # --- Fenêtre d'affichage (18h -> 17h lendemain) ---
     window_start, window_end = compute_window(now)
-    next_day = window_start.date() + timedelta(days=1)
-    sunrise_next = sunrise_by_date.get(next_day)
-    corr_window_start = window_start.replace(hour=NIGHT_CORR_START_HOUR, minute=0)
-    corr_window_end = (sunrise_next + timedelta(hours=1)) if sunrise_next else None
+    corr_start, corr_end = corr_window_for_evening(window_start.date(), sunset_by_date, sunrise_by_date)
 
-    offset_c = bias["offset_c"]
+    def offset_for_bucket(bucket):
+        key = str(bucket)
+        if key in profile:
+            return profile[key]
+        return default_offset(bucket)
 
+    current_offset_c = None
     hours_out = []
     t = window_start
     while t <= window_end:
@@ -231,11 +295,22 @@ def main():
         sn = snowfall[i] or 0
         hu = humidity[i]
 
-        in_corr_window = corr_window_end is not None and corr_window_start <= t <= corr_window_end
-        qualifies = ct < CLEAR_CLOUD_THRESHOLD and ws < CALM_WIND_THRESHOLD
+        eff_cloud = effective_cloud(cl, cm, ch)
+        in_corr_window = corr_end is not None and corr_start <= t <= corr_end
+        qualifies = eff_cloud < CLEAR_CLOUD_THRESHOLD and ws < CALM_WIND_THRESHOLD
         apply_corr = in_corr_window and qualifies
 
-        corrected_t = raw_t + offset_c if apply_corr else raw_t
+        applied_offset = None
+        bucket = None
+        if apply_corr:
+            bucket = min(int((t - corr_start).total_seconds() // 3600), MAX_BUCKET_HOURS)
+            applied_offset = offset_for_bucket(bucket)
+            corrected_t = raw_t + applied_offset
+            if t.replace(minute=0, second=0, microsecond=0) == now.replace(minute=0, second=0, microsecond=0):
+                current_offset_c = applied_offset
+        else:
+            corrected_t = raw_t
+
         picto = pick_picto(ct, cl, cm, ch, pr, rn, sn, hu, ws)
 
         hours_out.append({
@@ -243,6 +318,7 @@ def main():
             "temp_raw": round(raw_t, 1),
             "temp_corrected": round(corrected_t, 1),
             "corrected": apply_corr,
+            "correction_offset_c": round(applied_offset, 2) if applied_offset is not None else None,
             "wind_speed": round(ws, 1),
             "wind_gusts": round(wg, 1),
             "wind_dir": round(wd),
@@ -254,57 +330,41 @@ def main():
         })
         t += timedelta(hours=1)
 
-    # --- Apprentissage : comparer la nuit précédente (obs Datacake vs modèle) ---
-    prev_corr_end = corr_window_start  # la nuit qui vient de s'écouler se termine à 19h aujourd'hui... 
-    # En pratique on cherche la fenêtre de correction la plus récente entièrement passée :
-    # 19h (hier ou avant-hier) -> lever du soleil + 1h (ce matin ou hier matin)
-    candidate_night_start = now.replace(hour=NIGHT_CORR_START_HOUR, minute=0, second=0, microsecond=0)
-    if now.hour < NIGHT_CORR_START_HOUR:
-        candidate_night_start -= timedelta(days=1)
-    candidate_morning_date = (candidate_night_start + timedelta(days=1)).date()
-    candidate_sunrise = sunrise_by_date.get(candidate_morning_date)
-    night_ready = False
-    if candidate_sunrise:
-        candidate_night_end = candidate_sunrise + timedelta(hours=1)
-        night_ready = now >= candidate_night_end
-    night_key = candidate_night_start.date().isoformat()
+    # --- Apprentissage : la nuit la plus récente entièrement écoulée (celle
+    #     de l'avant-veille au soir, forcément déjà finie à l'heure où l'on
+    #     est puisque la fenêtre d'affichage courante commence à "aujourd'hui 18h") ---
+    candidate_evening = window_start.date() - timedelta(days=1)
+    cand_start, cand_end = corr_window_for_evening(candidate_evening, sunset_by_date, sunrise_by_date)
+    night_ready = cand_end is not None and now >= cand_end
+    night_key = candidate_evening.isoformat()
 
     if night_ready and bias.get("last_processed_night") != night_key and DATACAKE_TOKEN and DATACAKE_DEVICE_ID:
-        obs_series = fetch_datacake_series(candidate_night_start - timedelta(minutes=30),
-                                            candidate_night_end + timedelta(minutes=30))
-        errors = []
-        t = candidate_night_start
-        while t <= candidate_night_end:
+        obs_series = fetch_datacake_series(cand_start - timedelta(minutes=30), cand_end + timedelta(minutes=30))
+        learned = []
+        t = cand_start
+        while t <= cand_end:
             if t in idx_by_time:
                 i = idx_by_time[t]
-                ct = cloud_total[i] if cloud_total[i] is not None else 100
-                ws = wind_speed[i] or 0
-                if ct < CLEAR_CLOUD_THRESHOLD and ws < CALM_WIND_THRESHOLD:
+                eff_cloud = effective_cloud(cloud_low[i], cloud_mid[i], cloud_high[i])
+                ws_ = wind_speed[i] or 0
+                if eff_cloud < CLEAR_CLOUD_THRESHOLD and ws_ < CALM_WIND_THRESHOLD:
                     obs_v = nearest_value(obs_series, t)
                     if obs_v is not None and temp[i] is not None:
-                        errors.append(obs_v - temp[i])
+                        bucket = min(int((t - cand_start).total_seconds() // 3600), MAX_BUCKET_HOURS)
+                        error = obs_v - temp[i]
+                        key = str(bucket)
+                        old_val = profile.get(key, default_offset(bucket))
+                        new_val = (1 - alpha) * old_val + alpha * error
+                        profile[key] = round(new_val, 2)
+                        learned.append({"bucket": bucket, "error_c": round(error, 2), "offset_after": profile[key]})
             t += timedelta(hours=1)
 
-        if len(errors) >= 2:
-            mean_error = sum(errors) / len(errors)
-            alpha = bias.get("alpha", DEFAULT_ALPHA)
-            new_offset = (1 - alpha) * bias["offset_c"] + alpha * mean_error
-            bias["history"].append({
-                "night": night_key,
-                "mean_error_c": round(mean_error, 2),
-                "samples": len(errors),
-                "offset_before": round(bias["offset_c"], 2),
-                "offset_after": round(new_offset, 2),
-            })
-            bias["history"] = bias["history"][-MAX_HISTORY:]
-            bias["offset_c"] = new_offset
-            bias["last_night_error_c"] = round(mean_error, 2)
-            bias["last_night_samples"] = len(errors)
-            bias["last_processed_night"] = night_key
-        else:
-            bias["last_processed_night"] = night_key  # rien à apprendre cette nuit (pas assez d'heures claires/calmes)
-            bias["last_night_error_c"] = None
-            bias["last_night_samples"] = len(errors)
+        bias["offset_profile"] = profile
+        bias["last_processed_night"] = night_key
+        bias["last_night_samples"] = len(learned)
+        bias["last_night_error_c"] = round(sum(x["error_c"] for x in learned) / len(learned), 2) if learned else None
+        bias["history"].append({"night": night_key, "buckets_learned": learned})
+        bias["history"] = bias["history"][-MAX_HISTORY:]
 
     save_bias_state(bias)
 
@@ -314,12 +374,15 @@ def main():
         "location": {"name": LOCATION_NAME, "lat": LAT, "lon": LON},
         "window": {"start": window_start.isoformat(), "end": window_end.isoformat()},
         "correction": {
-            "offset_c": round(bias["offset_c"], 2),
-            "alpha": bias.get("alpha", DEFAULT_ALPHA),
+            "current_offset_c": round(current_offset_c, 2) if current_offset_c is not None else None,
+            "offset_profile": {k: profile[k] for k in sorted(profile, key=int)},
+            "alpha": alpha,
             "last_night_error_c": bias.get("last_night_error_c"),
             "last_night_samples": bias.get("last_night_samples", 0),
             "clear_cloud_threshold_pct": CLEAR_CLOUD_THRESHOLD,
             "calm_wind_threshold_kmh": CALM_WIND_THRESHOLD,
+            "high_cloud_attenuation": HIGH_CLOUD_ATTENUATION,
+            "sunset_lead_minutes": SUNSET_LEAD_MINUTES,
         },
         "hours": hours_out,
     }
@@ -327,7 +390,7 @@ def main():
     with open(FORECAST_PATH, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
 
-    print(f"OK — {len(hours_out)} heures écrites, offset actuel = {bias['offset_c']:.2f}°C")
+    print(f"OK — {len(hours_out)} heures écrites, {len(profile)} cases horaires apprises")
 
 
 if __name__ == "__main__":
