@@ -77,7 +77,7 @@ def parse_iso_local(s):
     return dt.replace(tzinfo=TZ)
 
 
-def pick_picto(cloud_total, cloud_high, precipitation, rain, snowfall, humidity, wind_speed):
+def pick_picto(cloud_total, cloud_low, cloud_mid, cloud_high, precipitation, rain, snowfall, humidity, wind_speed):
     if snowfall and snowfall > 0.05:
         return "neige"
     if rain and rain > 4:
@@ -86,7 +86,11 @@ def pick_picto(cloud_total, cloud_high, precipitation, rain, snowfall, humidity,
         return "pluie-faible"
     if humidity is not None and humidity > 95 and wind_speed < 5 and cloud_total > 80:
         return "brouillard"
-    if cloud_total < 20 and cloud_high is not None and cloud_high > 40:
+    # Nuages bas/moyens quasi absents mais nuages hauts significatifs
+    # (cirrus) -> ciel voilé, quel que soit le "total" (qui prend le max des étages
+    # et peut donc être élevé à cause des seuls nuages hauts).
+    low_mid = max(cloud_low or 0, cloud_mid or 0)
+    if low_mid < 20 and cloud_high is not None and cloud_high >= 40:
         return "voile"
     if cloud_total <= 20:
         return "clair"
@@ -232,7 +236,7 @@ def main():
         apply_corr = in_corr_window and qualifies
 
         corrected_t = raw_t + offset_c if apply_corr else raw_t
-        picto = pick_picto(ct, ch, pr, rn, sn, hu, ws)
+        picto = pick_picto(ct, cl, cm, ch, pr, rn, sn, hu, ws)
 
         hours_out.append({
             "time": t.isoformat(),
