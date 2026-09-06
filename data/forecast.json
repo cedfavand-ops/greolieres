@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-06T14:17:51.901592+02:00",
+  "generated_at": "2026-09-06T14:48:55.134335+02:00",
   "run_time": "2026-09-05T08:00:00+02:00",
   "location": {
     "name": "Gréolières-les-Neiges",
@@ -28,6 +28,9 @@
       "wind_gusts": 29.2,
       "wind_dir": 183,
       "cloud_cover": 10,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 10,
       "picto": "clair"
     },
     {
@@ -39,6 +42,9 @@
       "wind_gusts": 25.2,
       "wind_dir": 188,
       "cloud_cover": 9,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 9,
       "picto": "clair"
     },
     {
@@ -50,6 +56,9 @@
       "wind_gusts": 19.1,
       "wind_dir": 202,
       "cloud_cover": 0,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -61,6 +70,9 @@
       "wind_gusts": 9.0,
       "wind_dir": 217,
       "cloud_cover": 0,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -72,6 +84,9 @@
       "wind_gusts": 9.0,
       "wind_dir": 222,
       "cloud_cover": 0,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -83,6 +98,9 @@
       "wind_gusts": 9.7,
       "wind_dir": 219,
       "cloud_cover": 0,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -94,6 +112,9 @@
       "wind_gusts": 8.3,
       "wind_dir": 186,
       "cloud_cover": 0,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -105,6 +126,9 @@
       "wind_gusts": 4.3,
       "wind_dir": 194,
       "cloud_cover": 41,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 41,
+      "cloud_cover_high": 0,
       "picto": "peu-nuageux"
     },
     {
@@ -116,6 +140,9 @@
       "wind_gusts": 6.5,
       "wind_dir": 215,
       "cloud_cover": 0,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -127,6 +154,9 @@
       "wind_gusts": 17.3,
       "wind_dir": 225,
       "cloud_cover": 0,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -138,6 +168,9 @@
       "wind_gusts": 19.8,
       "wind_dir": 229,
       "cloud_cover": 0,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -149,6 +182,9 @@
       "wind_gusts": 18.7,
       "wind_dir": 230,
       "cloud_cover": 0,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -160,6 +196,9 @@
       "wind_gusts": 15.5,
       "wind_dir": 214,
       "cloud_cover": 0,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -171,6 +210,9 @@
       "wind_gusts": 10.8,
       "wind_dir": 209,
       "cloud_cover": 0,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -182,6 +224,9 @@
       "wind_gusts": 11.5,
       "wind_dir": 218,
       "cloud_cover": 0,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -193,6 +238,9 @@
       "wind_gusts": 10.8,
       "wind_dir": 230,
       "cloud_cover": 0,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -204,6 +252,9 @@
       "wind_gusts": 11.5,
       "wind_dir": 219,
       "cloud_cover": 7,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 7,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -215,6 +266,9 @@
       "wind_gusts": 15.1,
       "wind_dir": 193,
       "cloud_cover": 0,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -226,6 +280,9 @@
       "wind_gusts": 20.5,
       "wind_dir": 193,
       "cloud_cover": 3,
+      "cloud_cover_low": 3,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -237,6 +294,9 @@
       "wind_gusts": 30.2,
       "wind_dir": 199,
       "cloud_cover": 3,
+      "cloud_cover_low": 3,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 0,
       "picto": "clair"
     },
     {
@@ -248,6 +308,9 @@
       "wind_gusts": 36.4,
       "wind_dir": 202,
       "cloud_cover": 42,
+      "cloud_cover_low": 2,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 40,
       "picto": "peu-nuageux"
     },
     {
@@ -259,6 +322,9 @@
       "wind_gusts": 40.7,
       "wind_dir": 193,
       "cloud_cover": 100,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 100,
       "picto": "couvert"
     },
     {
@@ -270,6 +336,9 @@
       "wind_gusts": 41.4,
       "wind_dir": 193,
       "cloud_cover": 61,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 61,
       "picto": "tres-nuageux"
     },
     {
@@ -281,6 +350,9 @@
       "wind_gusts": 43.2,
       "wind_dir": 212,
       "cloud_cover": 100,
+      "cloud_cover_low": 0,
+      "cloud_cover_mid": 0,
+      "cloud_cover_high": 100,
       "picto": "couvert"
     }
   ]
