@@ -183,6 +183,8 @@ def main():
     wind_gusts = series("wind_gusts_10m")
     wind_dir = series("wind_direction_10m")
     cloud_total = series("cloud_cover")
+    cloud_low = series("cloud_cover_low")
+    cloud_mid = series("cloud_cover_mid")
     cloud_high = series("cloud_cover_high")
     precipitation = series("precipitation")
     rain = series("rain")
@@ -217,6 +219,8 @@ def main():
         wg = wind_gusts[i] or 0
         wd = wind_dir[i] or 0
         ct = cloud_total[i] if cloud_total[i] is not None else 100
+        cl = cloud_low[i]
+        cm = cloud_mid[i]
         ch = cloud_high[i]
         pr = precipitation[i] or 0
         rn = rain[i] or 0
@@ -239,6 +243,9 @@ def main():
             "wind_gusts": round(wg, 1),
             "wind_dir": round(wd),
             "cloud_cover": round(ct),
+            "cloud_cover_low": round(cl) if cl is not None else None,
+            "cloud_cover_mid": round(cm) if cm is not None else None,
+            "cloud_cover_high": round(ch) if ch is not None else None,
             "picto": picto,
         })
         t += timedelta(hours=1)
