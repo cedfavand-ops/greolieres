@@ -28,6 +28,10 @@
   tbody tr:hover{background:var(--card2);}
   tbody tr.night{background:rgba(56,189,248,0.04);}
   .picto{width:34px;height:34px;display:block;margin:0 auto;}
+  .clouds{font-size:.65rem;color:var(--muted);margin-top:2px;white-space:nowrap;}
+  .clouds b{color:#93c5fd;font-weight:600;}
+  .clouds .m{color:#a5b4fc;}
+  .clouds .h{color:#c4b5fd;}
   .temp{font-weight:700;font-size:1rem;}
   .temp.corrected{color:var(--cold);}
   .temp.corrected::after{content:" *";color:var(--accent);}
@@ -145,7 +149,12 @@ function render(data){
     const pictoLabel = PICTO_LABEL[h.picto] || h.picto;
     tr.innerHTML = `
       <td>${fmtHour(h.time)}</td>
-      <td><img class="picto" src="${pictoSrc}" alt="${pictoLabel}" title="${pictoLabel}" onerror="this.style.display='none'"></td>
+            <td>
+        <img class="picto" src="${pictoSrc}" alt="${pictoLabel}" title="${pictoLabel}" onerror="this.style.display='none'">
+        <div class="clouds" title="Nébulosité basse / moyenne / haute">
+          <b>${h.cloud_cover_low ?? '–'}</b>/<span class="m">${h.cloud_cover_mid ?? '–'}</span>/<span class="h">${h.cloud_cover_high ?? '–'}</span>%
+        </div>
+      </td>
       <td>
         <span class="temp ${h.corrected ? 'corrected' : ''}">${h.temp_corrected.toFixed(1)}°</span>
         ${h.corrected ? `<span class="raw-strike">modèle brut ${h.temp_raw.toFixed(1)}°</span>` : ''}
