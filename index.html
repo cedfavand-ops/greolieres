@@ -134,7 +134,7 @@ function render(data){
   meta.innerHTML = `
     <span>Généré le ${genDate}</span>
     <span>Run modèle : ${runDate}</span>
-    <span>Correction nocturne actuelle : ${data.correction.offset_c.toFixed(1)} °C</span>
+    <span>Correction actuelle : ${data.correction.current_offset_c !== null ? data.correction.current_offset_c.toFixed(1) + ' °C' : 'inactive (conditions non réunies)'}</span>
     <span>Dernière nuit apprise : ${data.correction.last_night_error_c !== null ? data.correction.last_night_error_c.toFixed(1)+' °C (écart obs.−modèle)' : 'n/a'}</span>
   `;
 
@@ -149,7 +149,7 @@ function render(data){
     const pictoLabel = PICTO_LABEL[h.picto] || h.picto;
     tr.innerHTML = `
       <td>${fmtHour(h.time)}</td>
-            <td>
+      <td>
         <img class="picto" src="${pictoSrc}" alt="${pictoLabel}" title="${pictoLabel}" onerror="this.style.display='none'">
         <div class="clouds" title="Nébulosité basse / moyenne / haute">
           <b>${h.cloud_cover_low ?? '–'}</b>/<span class="m">${h.cloud_cover_mid ?? '–'}</span>/<span class="h">${h.cloud_cover_high ?? '–'}</span>%
