@@ -1,0 +1,15 @@
+{
+  "generated_at": null,
+  "run_time": null,
+  "location": { "name": "Gréolières-les-Neiges", "lat": 43.8318, "lon": 6.9617 },
+  "window": { "start": null, "end": null },
+  "correction": {
+    "offset_c": -2.0,
+    "alpha": 0.25,
+    "last_night_error_c": null,
+    "last_night_samples": 0,
+    "clear_cloud_threshold_pct": 20,
+    "calm_wind_threshold_kmh": 10
+  },
+  "hours": []
+}

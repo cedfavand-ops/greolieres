@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Météo Gréolières-les-Neiges — 24h</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root{
+    --bg:#0f172a; --card:#1e293b; --card2:#26334a; --text:#e2e8f0; --muted:#94a3b8;
+    --accent:#38bdf8; --cold:#60a5fa; --warm:#fb923c; --line:#334155;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    background:linear-gradient(180deg,var(--bg),#0b1220); color:var(--text); padding:16px;
+  }
+  header{max-width:1100px;margin:0 auto 18px;}
+  h1{font-size:1.4rem;margin:0 0 4px;}
+  .sub{color:var(--muted);font-size:.9rem;}
+  .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:.82rem;color:var(--muted);}
+  .meta span{background:var(--card);padding:4px 10px;border-radius:20px;}
+  .wrap{max-width:1100px;margin:0 auto;}
+  .table-scroll{overflow-x:auto;background:var(--card);border-radius:14px;padding:8px;}
+  table{border-collapse:collapse;width:100%;min-width:900px;}
+  th,td{padding:8px 6px;text-align:center;font-size:.82rem;white-space:nowrap;}
+  thead th{color:var(--muted);font-weight:500;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);}
+  tbody tr:hover{background:var(--card2);}
+  tbody tr.night{background:rgba(56,189,248,0.04);}
+  .picto{width:34px;height:34px;display:block;margin:0 auto;}
+  .temp{font-weight:700;font-size:1rem;}
+  .temp.corrected{color:var(--cold);}
+  .temp.corrected::after{content:" *";color:var(--accent);}
+  .raw-strike{font-size:.7rem;color:var(--muted);text-decoration:line-through;display:block;}
+  .wind-dir{display:inline-block;transition:transform .2s;}
+  .legend{font-size:.75rem;color:var(--muted);margin-top:10px;line-height:1.5;}
+  .chart-card{background:var(--card);border-radius:14px;padding:16px;margin-top:20px;}
+  .chart-card h2{font-size:1rem;margin:0 0 10px;color:var(--muted);font-weight:600;}
+  canvas{max-height:340px;}
+  footer{max-width:1100px;margin:20px auto 0;color:var(--muted);font-size:.75rem;text-align:center;}
+  a{color:var(--accent);}
+  .err{background:#7f1d1d;color:#fecaca;padding:10px 14px;border-radius:10px;margin-bottom:14px;}
+  .badge-corr{font-size:.68rem;background:rgba(56,189,248,.15);color:var(--accent);padding:2px 6px;border-radius:6px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>❄️ Gréolières-les-Neiges — Prévisions 24h</h1>
+  <div class="sub">Modèle ICON-CH1 (MétéoSuisse via Open-Meteo) · Fenêtre 18h → 17h lendemain · Températures nocturnes corrigées pour le trou à froid</div>
+  <div class="meta" id="meta"></div>
+</header>
+
+<div class="wrap">
+  <div id="error"></div>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Heure</th>
+          <th>Ciel</th>
+          <th>Température</th>
+          <th>Vent</th>
+          <th>Direction</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <div class="legend" id="legend"></div>
+
+  <div class="chart-card">
+    <h2>Évolution de la température (corrigée)</h2>
+    <canvas id="chart"></canvas>
+  </div>
+</div>
+
+<footer>
+  Station de référence : <a href="https://app.datacake.de/pd/8edbfefb-584e-4866-a684-0b84928b85c9" target="_blank" rel="noopener">Datacake — Gréolières-les-Neiges</a>
+  &nbsp;·&nbsp; Coordonnées 43.8318, 6.9617 &nbsp;·&nbsp; Données générées automatiquement chaque heure.
+</footer>
+
+<script>
+const PICTO_MAP = {
+  "clair": "icons/clair.png",
+  "peu-nuageux": "icons/peu-nuageux.png",
+  "tres-nuageux": "icons/tres-nuageux.png",
+  "couvert": "icons/couvert.png",
+  "voile": "icons/voile.png",
+  "pluie-faible": "icons/pluie-faible.png",
+  "pluie-forte": "icons/pluie-forte.png",
+  "neige": "icons/neige.png",
+  "brouillard": "icons/brouillard.png"
+};
+const PICTO_LABEL = {
+  "clair":"Ciel clair","peu-nuageux":"Peu nuageux","tres-nuageux":"Très nuageux",
+  "couvert":"Couvert","voile":"Ciel voilé","pluie-faible":"Pluie faible","pluie-forte":"Pluie forte",
+  "neige":"Neige","brouillard":"Brouillard"
+};
+
+function fmtHour(iso){
+  const d = new Date(iso);
+  return d.toLocaleString('fr-FR', {weekday:'short', hour:'2-digit', minute:'2-digit'});
+}
+
+async function load(){
+  try{
+    const res = await fetch('data/forecast.json?_=' + Date.now());
+    if(!res.ok) throw new Error('data/forecast.json introuvable');
+    const data = await res.json();
+    render(data);
+  }catch(e){
+    document.getElementById('error').innerHTML =
+      '<div class="err">Impossible de charger les prévisions (' + e.message + '). '
+      + 'Le fichier data/forecast.json sera créé au premier passage du workflow GitHub Actions.</div>';
+  }
+}
+
+function render(data){
+  const meta = document.getElementById('meta');
+  const genDate = new Date(data.generated_at).toLocaleString('fr-FR');
+  const runDate = data.run_time ? new Date(data.run_time).toLocaleString('fr-FR') : '?';
+  meta.innerHTML = `
+    <span>Généré le ${genDate}</span>
+    <span>Run modèle : ${runDate}</span>
+    <span>Correction nocturne actuelle : ${data.correction.offset_c.toFixed(1)} °C</span>
+    <span>Dernière nuit apprise : ${data.correction.last_night_error_c !== null ? data.correction.last_night_error_c.toFixed(1)+' °C (écart obs.−modèle)' : 'n/a'}</span>
+  `;
+
+  const tbody = document.getElementById('rows');
+  tbody.innerHTML = '';
+  data.hours.forEach(h => {
+    const hourNum = new Date(h.time).getHours();
+    const isNight = hourNum >= 19 || hourNum < 8;
+    const tr = document.createElement('tr');
+    if(isNight) tr.classList.add('night');
+    const pictoSrc = PICTO_MAP[h.picto] || '';
+    const pictoLabel = PICTO_LABEL[h.picto] || h.picto;
+    tr.innerHTML = `
+      <td>${fmtHour(h.time)}</td>
+      <td><img class="picto" src="${pictoSrc}" alt="${pictoLabel}" title="${pictoLabel}" onerror="this.style.display='none'"></td>
+      <td>
+        <span class="temp ${h.corrected ? 'corrected' : ''}">${h.temp_corrected.toFixed(1)}°</span>
+        ${h.corrected ? `<span class="raw-strike">modèle brut ${h.temp_raw.toFixed(1)}°</span>` : ''}
+      </td>
+      <td>${Math.round(h.wind_speed)} km/h</td>
+      <td><span class="wind-dir" style="transform:rotate(${h.wind_dir}deg)">↓</span> ${Math.round(h.wind_dir)}°</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('legend').innerHTML =
+    '* Température corrigée à la baisse par rapport au modèle brut, sur la base des écarts observés '
+    + 'à la station Datacake les nuits claires et calmes précédentes (trou à froid).';
+
+  drawChart(data.hours);
+}
+
+function drawChart(hours){
+  const ctx = document.getElementById('chart');
+  const labels = hours.map(h => fmtHour(h.time));
+  const corrected = hours.map(h => h.temp_corrected);
+  const raw = hours.map(h => h.temp_raw);
+  if(window._chart) window._chart.destroy();
+  window._chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Température corrigée',
+          data: corrected,
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56,189,248,0.15)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 2
+        },
+        {
+          label: 'Modèle brut (ICON-CH1)',
+          data: raw,
+          borderColor: '#94a3b8',
+          borderDash: [4,4],
+          pointRadius: 0,
+          tension: 0.3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: '#e2e8f0' } } },
+      scales: {
+        x: { ticks: { color: '#94a3b8', maxRotation: 60, minRotation: 60 }, grid: { color: '#334155' } },
+        y: { ticks: { color: '#94a3b8' }, grid: { color: '#334155' } }
+      }
+    }
+  });
+}
+
+load();
+</script>
+</body>
+</html>
