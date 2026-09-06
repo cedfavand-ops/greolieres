@@ -54,8 +54,11 @@ DATACAKE_TOKEN = os.environ.get("DATACAKE_TOKEN", "").strip()
 DATACAKE_DEVICE_ID = os.environ.get("DATACAKE_DEVICE_ID", "").strip()
 DATACAKE_TEMP_FIELD = os.environ.get("DATACAKE_TEMP_FIELD", "TEMPERATURE").strip()
 
-CLEAR_CLOUD_THRESHOLD = 20      # seuil de nébulosité EFFECTIVE (%) en-dessous duquel on considère "ciel dégagé"
-CALM_WIND_THRESHOLD = 10        # km/h de vent moyen en-dessous duquel on considère "vent faible"
+CLEAR_CLOUD_THRESHOLD = 20      # nébulosité EFFECTIVE (%) en-dessous de laquelle le ciel est considéré pleinement dégagé
+CLOUD_ZERO_THRESHOLD = 45       # nébulosité EFFECTIVE (%) au-delà de laquelle la correction est nulle (rampe entre les deux)
+CALM_WIND_THRESHOLD = 10        # vent moyen (km/h) en-dessous duquel il est considéré pleinement calme
+WIND_ZERO_THRESHOLD = 22        # vent moyen (km/h) au-delà duquel la correction est nulle (rampe entre les deux)
+LEARN_CLARITY_MIN = 0.6         # clarté minimale d'une heure pour qu'elle compte dans l'apprentissage nocturne
 HIGH_CLOUD_ATTENUATION = 0.3    # poids résiduel des nuages hauts dans la nébulosité effective (0=ignorés, 1=comme bas/moyen)
 SUNSET_LEAD_MINUTES = 15        # la fenêtre de correction démarre ~15 min avant le coucher du soleil
 DEFAULT_ALPHA = 0.25            # poids donné à la dernière nuit dans la moyenne mobile (par case horaire)
@@ -104,6 +107,23 @@ def effective_cloud(cloud_low, cloud_mid, cloud_high):
     return min(100, low_mid + HIGH_CLOUD_ATTENUATION * (cloud_high or 0))
 
 
+def clarity_factor(eff_cloud, wind_speed):
+    """Facteur continu (0 à 1) remplaçant un seuil tout-ou-rien : la
+    correction s'estompe progressivement quand la nébulosité effective ou
+    le vent augmentent, au lieu de basculer brutalement on/off d'une heure
+    à l'autre pour un petit écart autour du seuil (effet "yo-yo")."""
+    def ramp(value, full_at, zero_at):
+        if value <= full_at:
+            return 1.0
+        if value >= zero_at:
+            return 0.0
+        return 1.0 - (value - full_at) / (zero_at - full_at)
+
+    cloud_c = ramp(eff_cloud, CLEAR_CLOUD_THRESHOLD, CLOUD_ZERO_THRESHOLD)
+    wind_c = ramp(wind_speed, CALM_WIND_THRESHOLD, WIND_ZERO_THRESHOLD)
+    return cloud_c * wind_c
+
+
 def pick_picto(cloud_total, cloud_low, cloud_mid, cloud_high, precipitation, rain, snowfall, humidity, wind_speed):
     if snowfall and snowfall > 0.05:
         return "neige"
@@ -114,10 +134,13 @@ def pick_picto(cloud_total, cloud_low, cloud_mid, cloud_high, precipitation, rai
     if humidity is not None and humidity > 95 and wind_speed < 5 and cloud_total > 80:
         return "brouillard"
     # Nuages bas/moyens quasi absents mais nuages hauts significatifs
-    # (cirrus) -> ciel voilé, quel que soit le "total" (qui prend le max des étages
-    # et peut donc être élevé à cause des seuls nuages hauts).
-    low_mid = max(cloud_low or 0, cloud_mid or 0)
-    if low_mid < 20 and cloud_high is not None and cloud_high >= 40:
+    # (cirrus) -> ciel voilé, quel que soit le "total" (qui peut être élevé à
+    # cause des seuls nuages hauts, ou d'un calcul de recouvrement des étages).
+    # Le bas compte plein pot (un stratus bas obscurcit vraiment le ciel), le
+    # moyen ne compte qu'à moitié (un peu d'altocumulus n'empêche pas un ciel
+    # de rester perçu comme "voilé" plutôt que "couvert").
+    voile_gate = (cloud_low or 0) + 0.5 * (cloud_mid or 0)
+    if voile_gate < 25 and cloud_high is not None and cloud_high >= 40:
         return "voile"
     if cloud_total <= 20:
         return "clair"
@@ -297,14 +320,14 @@ def main():
 
         eff_cloud = effective_cloud(cl, cm, ch)
         in_corr_window = corr_end is not None and corr_start <= t <= corr_end
-        qualifies = eff_cloud < CLEAR_CLOUD_THRESHOLD and ws < CALM_WIND_THRESHOLD
-        apply_corr = in_corr_window and qualifies
+        clarity = clarity_factor(eff_cloud, ws) if in_corr_window else 0.0
+        apply_corr = in_corr_window and clarity > 0
 
         applied_offset = None
         bucket = None
         if apply_corr:
             bucket = min(int((t - corr_start).total_seconds() // 3600), MAX_BUCKET_HOURS)
-            applied_offset = offset_for_bucket(bucket)
+            applied_offset = offset_for_bucket(bucket) * clarity
             corrected_t = raw_t + applied_offset
             if t.replace(minute=0, second=0, microsecond=0) == now.replace(minute=0, second=0, microsecond=0):
                 current_offset_c = applied_offset
@@ -319,6 +342,7 @@ def main():
             "temp_corrected": round(corrected_t, 1),
             "corrected": apply_corr,
             "correction_offset_c": round(applied_offset, 2) if applied_offset is not None else None,
+            "clarity": round(clarity, 2) if in_corr_window else None,
             "wind_speed": round(ws, 1),
             "wind_gusts": round(wg, 1),
             "wind_dir": round(wd),
@@ -347,7 +371,8 @@ def main():
                 i = idx_by_time[t]
                 eff_cloud = effective_cloud(cloud_low[i], cloud_mid[i], cloud_high[i])
                 ws_ = wind_speed[i] or 0
-                if eff_cloud < CLEAR_CLOUD_THRESHOLD and ws_ < CALM_WIND_THRESHOLD:
+                clarity_ = clarity_factor(eff_cloud, ws_)
+                if clarity_ >= LEARN_CLARITY_MIN:
                     obs_v = nearest_value(obs_series, t)
                     if obs_v is not None and temp[i] is not None:
                         bucket = min(int((t - cand_start).total_seconds() // 3600), MAX_BUCKET_HOURS)
@@ -380,7 +405,9 @@ def main():
             "last_night_error_c": bias.get("last_night_error_c"),
             "last_night_samples": bias.get("last_night_samples", 0),
             "clear_cloud_threshold_pct": CLEAR_CLOUD_THRESHOLD,
+            "cloud_zero_threshold_pct": CLOUD_ZERO_THRESHOLD,
             "calm_wind_threshold_kmh": CALM_WIND_THRESHOLD,
+            "wind_zero_threshold_kmh": WIND_ZERO_THRESHOLD,
             "high_cloud_attenuation": HIGH_CLOUD_ATTENUATION,
             "sunset_lead_minutes": SUNSET_LEAD_MINUTES,
         },
