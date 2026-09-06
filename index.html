@@ -32,7 +32,8 @@
   .temp.corrected{color:var(--cold);}
   .temp.corrected::after{content:" *";color:var(--accent);}
   .raw-strike{font-size:.7rem;color:var(--muted);text-decoration:line-through;display:block;}
-  .wind-dir{display:inline-block;transition:transform .2s;}
+  .gust{color:#f472b6;font-size:.72rem;display:block;margin-top:1px;}
+  .wind-dir{display:inline-block;font-size:1.5rem;line-height:1;transition:transform .2s;}
   .legend{font-size:.75rem;color:var(--muted);margin-top:10px;line-height:1.5;}
   .chart-card{background:var(--card);border-radius:14px;padding:16px;margin-top:20px;}
   .chart-card h2{font-size:1rem;margin:0 0 10px;color:var(--muted);font-weight:600;}
@@ -97,6 +98,13 @@ const PICTO_LABEL = {
   "neige":"Neige","brouillard":"Brouillard"
 };
 
+function windColor(speed){
+  if(speed < 10) return '#60a5fa';   // calme - bleu
+  if(speed < 20) return '#34d399';   // brise - vert
+  if(speed < 35) return '#fbbf24';   // soutenu - jaune/orange
+  return '#f87171';                  // fort - rouge
+}
+
 function fmtHour(iso){
   const d = new Date(iso);
   return d.toLocaleString('fr-FR', {weekday:'short', hour:'2-digit', minute:'2-digit'});
@@ -142,8 +150,11 @@ function render(data){
         <span class="temp ${h.corrected ? 'corrected' : ''}">${h.temp_corrected.toFixed(1)}°</span>
         ${h.corrected ? `<span class="raw-strike">modèle brut ${h.temp_raw.toFixed(1)}°</span>` : ''}
       </td>
-      <td>${Math.round(h.wind_speed)} km/h</td>
-      <td><span class="wind-dir" style="transform:rotate(${h.wind_dir}deg)">↓</span> ${Math.round(h.wind_dir)}°</td>
+      <td>
+        ${Math.round(h.wind_speed)} km/h
+        ${h.wind_gusts ? `<span class="gust">raf. ${Math.round(h.wind_gusts)}</span>` : ''}
+      </td>
+      <td><span class="wind-dir" style="transform:rotate(${h.wind_dir}deg);color:${windColor(h.wind_speed)}">↓</span></td>
     `;
     tbody.appendChild(tr);
   });
