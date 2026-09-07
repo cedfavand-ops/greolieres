@@ -254,6 +254,13 @@ def corr_window_for_evening(evening_date, sunset_by_date, sunrise_by_date):
 
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
+    if not DATACAKE_TOKEN or not DATACAKE_DEVICE_ID:
+        print(
+            "[warn] DATACAKE_TOKEN et/ou DATACAKE_DEVICE_ID absents ou vides : "
+            "la correction s'appliquera avec le profil déjà appris (ou le profil "
+            "par défaut), mais aucun apprentissage n'aura lieu ce passage-ci.",
+            file=sys.stderr,
+        )
     now = datetime.now(TZ)
     bias = load_bias_state()
     profile = bias["offset_profile"]
