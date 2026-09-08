@@ -72,7 +72,7 @@ def http_get_json(url, headers=None):
         return json.loads(resp.read().decode("utf-8"))
 
 
-def fetch_openmeteo(past_hours=0, forecast_days=3):
+def fetch_openmeteo(past_days=2, forecast_days=3):
     params = {
         "latitude": LAT,
         "longitude": LON,
@@ -86,7 +86,11 @@ def fetch_openmeteo(past_hours=0, forecast_days=3):
         "timezone": "Europe/Berlin",
         "wind_speed_unit": "kmh",
         "forecast_days": forecast_days,
-        "past_hours": past_hours,
+        # past_days étend aussi le tableau "daily" (lever/coucher du soleil) en
+        # arrière, contrairement à past_hours qui ne joue que sur "hourly" -
+        # indispensable pour retrouver le coucher de soleil d'hier soir et
+        # calculer rétrospectivement la fenêtre de correction de la nuit passée.
+        "past_days": past_days,
     }
     url = "https://api.open-meteo.com/v1/forecast?" + urllib.parse.urlencode(params)
     return http_get_json(url)
@@ -203,6 +207,13 @@ def fetch_datacake_series(start_dt, end_dt):
     except (urllib.error.URLError, urllib.error.HTTPError, ValueError) as e:
         print(f"[warn] Datacake indisponible: {e}", file=sys.stderr)
         return []
+    if not data:
+        print(
+            "[warn] Datacake a répondu mais sans aucune donnée sur cette période "
+            "(vérifier DATACAKE_DEVICE_ID, ou absence de mesures récentes).",
+            file=sys.stderr,
+        )
+        return []
     out = []
     for row in data:
         try:
@@ -212,6 +223,13 @@ def fetch_datacake_series(start_dt, end_dt):
                 out.append((t, float(v)))
         except Exception:
             continue
+    if not out:
+        available = sorted(k for k in data[0].keys() if k != "time")
+        print(
+            f"[warn] Aucune valeur trouvée pour le champ DATACAKE_TEMP_FIELD="
+            f"'{DATACAKE_TEMP_FIELD}'. Champs disponibles sur ce device : {available}",
+            file=sys.stderr,
+        )
     return out
 
 
@@ -266,7 +284,7 @@ def main():
     profile = bias["offset_profile"]
     alpha = bias.get("alpha", DEFAULT_ALPHA)
 
-    om = fetch_openmeteo(past_hours=36, forecast_days=3)
+    om = fetch_openmeteo(past_days=2, forecast_days=3)
     hourly = om["hourly"]
     times = [parse_iso_local(t) for t in hourly["time"]]
 
