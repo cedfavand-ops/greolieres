@@ -192,12 +192,16 @@ def save_bias_state(state):
 
 
 def fetch_datacake_series(start_dt, end_dt):
-    """Retourne une liste de (datetime, temperature) depuis Datacake, ou [] si indisponible."""
+    """Retourne une liste de (datetime, temperature) depuis Datacake en cas de
+    succès (liste vide si succès mais aucune donnée), ou None si la requête
+    elle-même a échoué (erreur réseau/HTTP) - ce cas ne doit JAMAIS être
+    traité comme "nuit sans données exploitables", pour permettre un nouvel
+    essai au prochain passage plutôt que d'abandonner définitivement."""
     if not (DATACAKE_TOKEN and DATACAKE_DEVICE_ID):
-        return []
+        return None
     params = {
         "fields": DATACAKE_TEMP_FIELD,
-        "resolution": "15m",
+        "resolution": "5m",
         "timeframe_start": start_dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "timeframe_end": end_dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
@@ -212,13 +216,13 @@ def fetch_datacake_series(start_dt, end_dt):
         print(
             f"[warn] Datacake indisponible: HTTP {e.code} {e.reason} — "
             f"device_id_len={len(DATACAKE_DEVICE_ID)} field='{DATACAKE_TEMP_FIELD}' "
-            f"resolution='15m' url={url} — réponse: {body}",
+            f"resolution='5m' url={url} — réponse: {body}",
             file=sys.stderr,
         )
-        return []
+        return None
     except (urllib.error.URLError, ValueError) as e:
         print(f"[warn] Datacake indisponible: {e}", file=sys.stderr)
-        return []
+        return None
     if not data:
         print(
             "[warn] Datacake a répondu mais sans aucune donnée sur cette période "
@@ -401,32 +405,47 @@ def main():
 
     if night_ready and bias.get("last_processed_night") != night_key and DATACAKE_TOKEN and DATACAKE_DEVICE_ID:
         obs_series = fetch_datacake_series(cand_start - timedelta(minutes=30), cand_end + timedelta(minutes=30))
-        learned = []
-        t = cand_start
-        while t <= cand_end:
-            if t in idx_by_time:
-                i = idx_by_time[t]
-                eff_cloud = effective_cloud(cloud_low[i], cloud_mid[i], cloud_high[i])
-                ws_ = wind_speed[i] or 0
-                clarity_ = clarity_factor(eff_cloud, ws_)
-                if clarity_ >= LEARN_CLARITY_MIN:
-                    obs_v = nearest_value(obs_series, t)
-                    if obs_v is not None and temp[i] is not None:
-                        bucket = min(int((t - cand_start).total_seconds() // 3600), MAX_BUCKET_HOURS)
-                        error = obs_v - temp[i]
-                        key = str(bucket)
-                        old_val = profile.get(key, default_offset(bucket))
-                        new_val = (1 - alpha) * old_val + alpha * error
-                        profile[key] = round(new_val, 2)
-                        learned.append({"bucket": bucket, "error_c": round(error, 2), "offset_after": profile[key]})
-            t += timedelta(hours=1)
+        if obs_series is None:
+            # Échec de la requête (réseau/HTTP) : on NE marque PAS cette nuit
+            # comme traitée, pour que le prochain passage horaire réessaie -
+            # sinon une panne temporaire de l'API condamnerait cette nuit à
+            # rester non-apprise pour toujours.
+            print(
+                f"[warn] Nuit {night_key} non traitée (échec de récupération Datacake) — "
+                "nouvel essai au prochain passage.",
+                file=sys.stderr,
+            )
+            learned = None
+        else:
+            learned = []
+            t = cand_start
+            while t <= cand_end:
+                if t in idx_by_time:
+                    i = idx_by_time[t]
+                    eff_cloud = effective_cloud(cloud_low[i], cloud_mid[i], cloud_high[i])
+                    ws_ = wind_speed[i] or 0
+                    clarity_ = clarity_factor(eff_cloud, ws_)
+                    if clarity_ >= LEARN_CLARITY_MIN:
+                        obs_v = nearest_value(obs_series, t)
+                        if obs_v is not None and temp[i] is not None:
+                            bucket = min(int((t - cand_start).total_seconds() // 3600), MAX_BUCKET_HOURS)
+                            error = obs_v - temp[i]
+                            key = str(bucket)
+                            old_val = profile.get(key, default_offset(bucket))
+                            new_val = (1 - alpha) * old_val + alpha * error
+                            profile[key] = round(new_val, 2)
+                            learned.append({"bucket": bucket, "error_c": round(error, 2), "offset_after": profile[key]})
+                t += timedelta(hours=1)
 
-        bias["offset_profile"] = profile
-        bias["last_processed_night"] = night_key
-        bias["last_night_samples"] = len(learned)
-        bias["last_night_error_c"] = round(sum(x["error_c"] for x in learned) / len(learned), 2) if learned else None
-        bias["history"].append({"night": night_key, "buckets_learned": learned})
-        bias["history"] = bias["history"][-MAX_HISTORY:]
+        if learned is not None:
+            bias["offset_profile"] = profile
+            bias["last_processed_night"] = night_key
+            bias["last_night_samples"] = len(learned)
+            bias["last_night_error_c"] = (
+                round(sum(x["error_c"] for x in learned) / len(learned), 2) if learned else None
+            )
+            bias["history"].append({"night": night_key, "buckets_learned": learned})
+            bias["history"] = bias["history"][-MAX_HISTORY:]
 
     save_bias_state(bias)
 
