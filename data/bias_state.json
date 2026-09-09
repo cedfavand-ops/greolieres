@@ -1,12 +1,16 @@
 {
   "offset_profile": {},
   "alpha": 0.25,
-  "last_processed_night": "2026-09-07",
+  "last_processed_night": "2026-09-08",
   "last_night_error_c": null,
   "last_night_samples": 0,
   "history": [
     {
       "night": "2026-09-07",
+      "buckets_learned": []
+    },
+    {
+      "night": "2026-09-08",
       "buckets_learned": []
     }
   ]
