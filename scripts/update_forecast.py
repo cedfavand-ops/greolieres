@@ -204,7 +204,19 @@ def fetch_datacake_series(start_dt, end_dt):
     url = f"https://api.datacake.co/v1/devices/{DATACAKE_DEVICE_ID}/historic_data/?" + urllib.parse.urlencode(params)
     try:
         data = http_get_json(url, headers={"Authorization": f"Token {DATACAKE_TOKEN}"})
-    except (urllib.error.URLError, urllib.error.HTTPError, ValueError) as e:
+    except urllib.error.HTTPError as e:
+        try:
+            body = e.read().decode("utf-8", errors="replace")[:500]
+        except Exception:
+            body = "(impossible de lire le corps de la réponse)"
+        print(
+            f"[warn] Datacake indisponible: HTTP {e.code} {e.reason} — "
+            f"device_id_len={len(DATACAKE_DEVICE_ID)} field='{DATACAKE_TEMP_FIELD}' "
+            f"resolution='15m' url={url} — réponse: {body}",
+            file=sys.stderr,
+        )
+        return []
+    except (urllib.error.URLError, ValueError) as e:
         print(f"[warn] Datacake indisponible: {e}", file=sys.stderr)
         return []
     if not data:
