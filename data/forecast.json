@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-10T19:17:53.482177+02:00",
+  "generated_at": "2026-09-10T19:30:40.669211+02:00",
   "run_time": "2026-09-08T00:00:00+02:00",
   "location": {
     "name": "Gréolières-les-Neiges",
@@ -12,10 +12,12 @@
   },
   "correction": {
     "current_offset_c": -0.88,
-    "offset_profile": {},
+    "offset_profile": {
+      "4": -7.94
+    },
     "alpha": 0.25,
-    "last_night_error_c": null,
-    "last_night_samples": 0,
+    "last_night_error_c": -6.6,
+    "last_night_samples": 1,
     "clear_cloud_threshold_pct": 20,
     "cloud_zero_threshold_pct": 45,
     "calm_wind_threshold_kmh": 10,
