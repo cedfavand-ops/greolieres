@@ -201,7 +201,7 @@ def fetch_datacake_series(start_dt, end_dt):
         return None
     params = {
         "fields": DATACAKE_TEMP_FIELD,
-        "resolution": "5m",
+        "resolution": "raw",
         "timeframe_start": start_dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "timeframe_end": end_dt.astimezone(ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
@@ -216,7 +216,7 @@ def fetch_datacake_series(start_dt, end_dt):
         print(
             f"[warn] Datacake indisponible: HTTP {e.code} {e.reason} — "
             f"device_id_len={len(DATACAKE_DEVICE_ID)} field='{DATACAKE_TEMP_FIELD}' "
-            f"resolution='5m' url={url} — réponse: {body}",
+            f"resolution='raw' url={url} — réponse: {body}",
             file=sys.stderr,
         )
         return None
