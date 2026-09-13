@@ -59,7 +59,7 @@ CLOUD_ZERO_THRESHOLD = 45       # nébulosité EFFECTIVE (%) au-delà de laquell
 CALM_WIND_THRESHOLD = 10        # vent moyen (km/h) en-dessous duquel il est considéré pleinement calme
 WIND_ZERO_THRESHOLD = 22        # vent moyen (km/h) au-delà duquel la correction est nulle (rampe entre les deux)
 LEARN_CLARITY_MIN = 0.6         # clarté minimale d'une heure pour qu'elle compte dans l'apprentissage nocturne
-HIGH_CLOUD_ATTENUATION = 0.3    # poids résiduel des nuages hauts dans la nébulosité effective (0=ignorés, 1=comme bas/moyen)
+HIGH_CLOUD_ATTENUATION = 0.1    # poids résiduel des nuages hauts dans la nébulosité effective (0=ignorés, 1=comme bas/moyen)
 SUNSET_LEAD_MINUTES = 15        # la fenêtre de correction démarre ~15 min avant le coucher du soleil
 DEFAULT_ALPHA = 0.25            # poids donné à la dernière nuit dans la moyenne mobile (par case horaire)
 MAX_HISTORY = 90                # nombre de nuits conservées dans l'historique
