@@ -8,17 +8,17 @@
     "6": -11.11,
     "7": -11.19,
     "8": -11.97,
-    "9": -12.34,
-    "10": -12.48,
+    "9": -12.78,
+    "10": -12.83,
     "11": -12.64,
     "12": -12.55,
     "13": -10.3,
     "0": -1.4
   },
   "alpha": 0.25,
-  "last_processed_night": "2026-09-13",
-  "last_night_error_c": -11.66,
-  "last_night_samples": 12,
+  "last_processed_night": "2026-09-14",
+  "last_night_error_c": -14.0,
+  "last_night_samples": 2,
   "history": [
     {
       "night": "2026-09-07",
@@ -305,6 +305,21 @@
           "bucket": 13,
           "error_c": -10.8,
           "offset_after": -10.3
+        }
+      ]
+    },
+    {
+      "night": "2026-09-14",
+      "buckets_learned": [
+        {
+          "bucket": 9,
+          "error_c": -14.1,
+          "offset_after": -12.78
+        },
+        {
+          "bucket": 10,
+          "error_c": -13.9,
+          "offset_after": -12.83
         }
       ]
     }
