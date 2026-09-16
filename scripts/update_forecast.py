@@ -165,6 +165,29 @@ def default_offset(bucket):
     return -(2.0 + 8.0 * (1 - math.exp(-bucket / 2.5)))
 
 
+def smooth_profile(profile, neighbor_weight=0.15):
+    """Lissage léger entre cases horaires voisines : chaque case horaire est
+    apprise indépendamment (moyenne mobile sur les nuits qui l'ont
+    effectivement traversée), donc avec peu de nuits de données un simple
+    aléa météo une nuit donnée peut faire dévier une case par rapport à ses
+    voisines sans raison physique (le refroidissement radiatif ne peut pas
+    vraiment faire un aller-retour brutal d'une heure à l'autre). Ce lissage
+    (moyenne pondérée avec les 2 cases adjacentes) élimine ce bruit sans
+    effacer la vraie forme (chute rapide puis ralentissement)."""
+    keys = sorted(profile, key=int)
+    if len(keys) < 3:
+        return profile
+    vals = [profile[k] for k in keys]
+    smoothed = vals[:]
+    for i in range(1, len(vals) - 1):
+        smoothed[i] = (
+            (1 - 2 * neighbor_weight) * vals[i]
+            + neighbor_weight * vals[i - 1]
+            + neighbor_weight * vals[i + 1]
+        )
+    return {k: round(v, 2) for k, v in zip(keys, smoothed)}
+
+
 def load_bias_state():
     if os.path.exists(BIAS_PATH):
         with open(BIAS_PATH, "r", encoding="utf-8") as f:
@@ -438,7 +461,7 @@ def main():
                 t += timedelta(hours=1)
 
         if learned is not None:
-            bias["offset_profile"] = profile
+            bias["offset_profile"] = smooth_profile(profile)
             bias["last_processed_night"] = night_key
             bias["last_night_samples"] = len(learned)
             bias["last_night_error_c"] = (
