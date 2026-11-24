@@ -1,26 +1,26 @@
 {
   "offset_profile": {
-    "0": -2.02,
-    "1": -4.08,
-    "2": -5.6,
-    "3": -6.67,
-    "4": -7.31,
-    "5": -7.6,
-    "6": -7.94,
-    "7": -8.28,
-    "8": -8.62,
-    "9": -8.96,
-    "10": -9.19,
-    "11": -9.19,
-    "12": -8.88,
-    "13": -8.16,
-    "14": -6.85,
+    "0": -1.49,
+    "1": -4.09,
+    "2": -6.03,
+    "3": -7.36,
+    "4": -8.19,
+    "5": -8.56,
+    "6": -9.05,
+    "7": -9.14,
+    "8": -8.77,
+    "9": -8.94,
+    "10": -9.16,
+    "11": -9.14,
+    "12": -8.82,
+    "13": -8.07,
+    "14": -6.77,
     "15": -5.01
   },
   "alpha": 0.25,
-  "last_processed_night": "2026-11-22",
-  "last_night_error_c": null,
-  "last_night_samples": 0,
+  "last_processed_night": "2026-11-23",
+  "last_night_error_c": -8.65,
+  "last_night_samples": 8,
   "history": [
     {
       "night": "2026-09-07",
@@ -2533,6 +2533,51 @@
     {
       "night": "2026-11-22",
       "buckets_learned": []
+    },
+    {
+      "night": "2026-11-23",
+      "buckets_learned": [
+        {
+          "bucket": 0,
+          "error_c": 0.1,
+          "offset_after": -1.49
+        },
+        {
+          "bucket": 1,
+          "error_c": -4.6,
+          "offset_after": -4.21
+        },
+        {
+          "bucket": 2,
+          "error_c": -7.7,
+          "offset_after": -6.12
+        },
+        {
+          "bucket": 3,
+          "error_c": -9.7,
+          "offset_after": -7.43
+        },
+        {
+          "bucket": 4,
+          "error_c": -11.2,
+          "offset_after": -8.28
+        },
+        {
+          "bucket": 5,
+          "error_c": -11.2,
+          "offset_after": -8.5
+        },
+        {
+          "bucket": 6,
+          "error_c": -12.7,
+          "offset_after": -9.13
+        },
+        {
+          "bucket": 7,
+          "error_c": -12.2,
+          "offset_after": -9.26
+        }
+      ]
     }
   ]
 }
